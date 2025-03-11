@@ -1,0 +1,36 @@
+{
+    "setores": [
+      "FLV-SECO",
+      "FLV-FRIO",
+      "MERCEARIA",
+      "MERCEARIA-CHOCO",
+      "CENTRAL DE PRODUCAO",
+      "Central-Produção-Estoque",
+      "Produção-CAM5",
+      "Produção-CAM7",
+      "Mercearia",
+      "Mercearia-DP02",
+      "Mercearia-Chocolate",
+      "Mercearia-INFRA",
+      "PERECIVIES-DP50",
+      "PERECIVIES-CAM1",
+      "PERECIVIES-CAM2",
+      "PERECIVIES-CAM3",
+      "PERECIVIES-CAM5",
+      "PERECIVIES-CAM6",
+      "PERECIVIES-CAM8",
+      "PERECIVIES-CAM9",
+      "PERECIVIES-CAM10",
+      "PERECIVIES-CAM11",
+      "FLV-EstoqueSeco",
+      "FLV-EstoqueFrio",
+      "FLV-Separação",
+      "FLV-Reversa",
+      "BlocadoSP",
+      "BlocadoES",
+      "FLV-CAM1",
+      "FLV-CAM2",
+      "FLV-CAM4"
+    ]
+  }
+  
