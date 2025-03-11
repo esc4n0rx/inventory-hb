@@ -27,7 +27,7 @@ async function getPenultimoCod(table: string) {
     .from(table)
     .select('cod_inventario')
     .order('cod_inventario', { ascending: false })
-    .range(1, 1) // índice 0 é o maior, 1 é o penúltimo
+    .range(1, 1) // 0 é o maior, 1 é o penúltimo
   if (error || !data || data.length === 0) {
     return null
   }
@@ -177,8 +177,30 @@ export async function GET(request: Request) {
       return { setor, ativos }
     })
 
-    // --- Cálculo da Diferença ---
-    // Busca o inventário anterior (penúltimo) para cada tabela
+    // --- Dados Fornecedores (ativo_fornecedores) ---
+    const maxCodFornecedores = await getMaxCod('ativo_fornecedores')
+    const { data: rowsFornecedores, error: errorFornecedores } = await supabase
+      .from('ativo_fornecedores')
+      .select('*')
+      .eq('cod_inventario', maxCodFornecedores)
+    if (errorFornecedores || !rowsFornecedores) {
+      throw new Error(errorFornecedores?.message)
+    }
+    const dadosFornecedores: Record<Ativos, number> = {
+      "CAIXA HB 623": 0,
+      "CAIXA HB 618": 0,
+      "CAIXA HNT G": 0,
+      "CAIXA HNT P": 0,
+      "CAIXA BASCULHANTE": 0,
+      "CAIXA BIN": 0
+    }
+    for (const row of rowsFornecedores) {
+      // Assume que o campo "ativo" na tabela corresponde exatamente aos nomes definidos
+      const ativoNome = row.ativo as Ativos
+      dadosFornecedores[ativoNome] += row.quantidade || 0
+    }
+
+    // --- Cálculo da Diferença (mantém a lógica já existente) ---
     const penultimoCodLojas = await getPenultimoCod('ativo_contagemlojas')
     const penultimoCodCD = await getPenultimoCod('ativo_inventario_hb')
     const penultimoCodTransito = await getPenultimoCod('ativo_dadostransito')
@@ -245,6 +267,7 @@ export async function GET(request: Request) {
       dadosLojas,
       dadosCD,
       dadosTransito,
+      dadosFornecedores,
       diferenca: {
         lojas: diferencaLojas,
         cd: diferencaCD,

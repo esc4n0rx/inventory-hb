@@ -9,7 +9,6 @@ import { motion } from "framer-motion"
 import {
   Package,
   AlertTriangle,
-  Plus,
   ClipboardCheck,
   PackageSearch,
   ArrowUp,
@@ -43,6 +42,13 @@ interface DashboardData {
   distribuicaoAtivos: any[]
 }
 
+interface AcompanhamentoResponse {
+  totalLojas: number
+  totalContadas: number
+  percentual: number
+  pendentes: { [regional: string]: string[] }
+}
+
 const barData = [
   { name: "CAIXA HB 623", quantidade: 150, esperado: 155 },
   { name: "CAIXA HB 618", quantidade: 120, esperado: 120 },
@@ -70,9 +76,11 @@ const item = {
 export default function Home() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
+  const [showStatusModal, setShowStatusModal] = useState<boolean>(false)
+  const [statusData, setStatusData] = useState<AcompanhamentoResponse | null>(null)
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchDashboard = async () => {
       try {
         const res = await fetch("/api/calc_dash")
         const data: DashboardData = await res.json()
@@ -83,15 +91,25 @@ export default function Home() {
         setLoading(false)
       }
     }
-    fetchData()
+    fetchDashboard()
   }, [])
 
-  // Dados para o gráfico "Status do Inventário"
   const pieData = dashboardData?.statusInventario || [
     { name: "Conferidos", value: 0, color: "hsl(var(--chart-1))" },
     { name: "Em Contagem", value: 0, color: "hsl(var(--chart-2))" },
     { name: "Pendentes", value: 0, color: "hsl(var(--chart-3))" },
   ]
+
+  const handleStatusModal = async () => {
+    try {
+      const res = await fetch("/api/acompanhamento")
+      const data: AcompanhamentoResponse = await res.json()
+      setStatusData(data)
+      setShowStatusModal(true)
+    } catch (error) {
+      console.error("Erro ao buscar dados de acompanhamento:", error)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -108,9 +126,11 @@ export default function Home() {
                 Última atualização: {new Date().toLocaleDateString("pt-BR")}
               </p>
             </div>
-            <Button size="lg">
-              <Plus className="mr-2 h-5 w-5" /> Iniciar Novo Inventário
-            </Button>
+            <div>
+              <Button size="lg" onClick={handleStatusModal}>
+                Status Atual
+              </Button>
+            </div>
           </div>
 
           {loading ? (
@@ -134,10 +154,6 @@ export default function Home() {
                     <CardContent>
                       <div className="text-2xl font-bold">
                         {dashboardData?.totalAtivos}
-                      </div>
-                      <div className="flex items-center text-xs text-emerald-500 mt-1">
-                        <ArrowUp className="h-4 w-4 mr-1" />
-                        {/* <span>2.1% em relação ao mês anterior</span> */}
                       </div>
                     </CardContent>
                   </Card>
@@ -175,8 +191,6 @@ export default function Home() {
                       <div className="text-2xl font-bold">
                         {dashboardData?.itensConferidos}
                       </div>
-                      <div className="flex items-center text-xs text-emerald-500 mt-1">
-                      </div>
                     </CardContent>
                   </Card>
                 </motion.div>
@@ -192,8 +206,6 @@ export default function Home() {
                     <CardContent>
                       <div className="text-2xl font-bold">
                         {dashboardData?.emInventario}
-                      </div>
-                      <div className="flex items-center text-xs text-muted-foreground mt-1">
                       </div>
                     </CardContent>
                   </Card>
@@ -215,12 +227,9 @@ export default function Home() {
                       <div className="h-[400px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={barData} margin={{ left: 20 }}>
-                            <CartesianGrid
-                              strokeDasharray="3 3"
-                              opacity={0.4}
-                            />
-                            <XAxis
-                              dataKey="name"
+                            <CartesianGrid strokeDasharray="3 3" opacity={0.4} />
+                            <XAxis 
+                              dataKey="name" 
                               angle={-45}
                               textAnchor="end"
                               height={80}
@@ -228,22 +237,22 @@ export default function Home() {
                               tick={{ fontSize: 12 }}
                             />
                             <YAxis />
-                            <Tooltip
-                              contentStyle={{
-                                backgroundColor: "hsl(var(--background))",
-                                border: "1px solid hsl(var(--border))",
+                            <Tooltip 
+                              contentStyle={{ 
+                                backgroundColor: 'hsl(var(--background))',
+                                border: '1px solid hsl(var(--border))'
                               }}
                             />
                             <Legend />
-                            <Bar
-                              name="Quantidade Atual"
-                              dataKey="quantidade"
+                            <Bar 
+                              name="Quantidade Atual" 
+                              dataKey="quantidade" 
                               fill="hsl(var(--chart-1))"
                               radius={[4, 4, 0, 0]}
                             />
-                            <Bar
-                              name="Quantidade Esperada"
-                              dataKey="esperado"
+                            <Bar 
+                              name="Quantidade Esperada" 
+                              dataKey="esperado" 
                               fill="hsl(var(--chart-2))"
                               radius={[4, 4, 0, 0]}
                             />
@@ -273,16 +282,13 @@ export default function Home() {
                               dataKey="value"
                             >
                               {pieData.map((entry, index) => (
-                                <Cell
-                                  key={`cell-${index}`}
-                                  fill={entry.color}
-                                />
+                                <Cell key={`cell-${index}`} fill={entry.color} />
                               ))}
                             </Pie>
-                            <Tooltip
-                              contentStyle={{
-                                backgroundColor: "hsl(var(--background))",
-                                border: "1px solid hsl(var(--border))",
+                            <Tooltip 
+                              contentStyle={{ 
+                                backgroundColor: 'hsl(var(--background))',
+                                border: '1px solid hsl(var(--border))'
                               }}
                             />
                             <Legend />
@@ -297,6 +303,45 @@ export default function Home() {
           )}
         </main>
       </div>
+
+      {/* Modal de Status Atual */}
+      {showStatusModal && statusData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
+          <div
+            className="absolute inset-0 bg-black opacity-50"
+            onClick={() => setShowStatusModal(false)}
+          ></div>
+          <div className="relative bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6">
+            <h2 className="text-2xl font-bold mb-4">Status Atual do Inventário</h2>
+            <div className="mb-4">
+              <p className="text-sm">
+                {statusData.totalContadas} de {statusData.totalLojas} lojas contadas
+              </p>
+              <p className="text-lg font-bold">
+                {statusData.percentual}% do inventário realizado
+              </p>
+            </div>
+            <div>
+              <h3 className="text-md font-semibold mb-2">Lojas Pendentes por Regional</h3>
+              {Object.entries(statusData.pendentes).map(([regional, lojas]) => (
+                <div key={regional} className="mb-2">
+                  <p className="text-sm font-medium">{regional}:</p>
+                  <ul className="list-disc list-inside text-xs">
+                    {lojas.map((loja, idx) => (
+                      <li key={idx}>{loja}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end mt-4">
+              <Button variant="outline" onClick={() => setShowStatusModal(false)}>
+                Fechar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

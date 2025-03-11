@@ -3,10 +3,6 @@ import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import lojasDataRaw from '@/lib/lojas.json'
 import setoresDataRaw from '@/lib/setor.json'
-import fs from 'fs'
-import path from 'path'
-
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 interface LojasJson {
   lojas: string[]
@@ -91,11 +87,6 @@ export async function GET(request: Request) {
     `- Total: ${totalSetores}\n` +
     `- Conferidos (${finishedSetores}): ${finishedSetoresNames.join(', ')}\n` +
     `- Pendentes (${pendingSetores}): ${pendingSetoresNames.join(', ')}\n\n`
-
-  // Determina o caminho do arquivo log.txt na raiz do projeto
-  const logFilePath = path.join(process.cwd(), 'log.txt')
-  // Anexa a mensagem ao arquivo de log
-  fs.appendFileSync(logFilePath, logMessage, 'utf8')
 
   // Estrutura de resposta para a dashboard com cores definidas
   const responseData = {
