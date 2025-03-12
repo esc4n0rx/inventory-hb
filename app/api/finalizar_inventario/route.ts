@@ -2,11 +2,12 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 
-// Tipos de ativos para o modo inventariohb
+// Tipos dos ativos para cada modo
 type AtivosHB = "CAIXA HB 623" | "CAIXA HB 618"
+type AtivosHNT = "CAIXA HNT G" | "CAIXA HNT P"
 
-// Retorna o maior cod_inventario da tabela, usado para identificar o inventário atual
-async function getMaxCod(table: string) {
+// Retorna o maior cod_inventario da tabela ativo_inventario_hb
+async function getMaxCod(table: string): Promise<number> {
   const { data, error } = await supabase
     .from(table)
     .select('cod_inventario')
@@ -27,7 +28,13 @@ function sumField(rows: any[], field: string): number {
 }
 
 // Função para buscar dados da tabela de contagem (ativo_contagemlojas)
-async function fetchContagem(table: string, cod_inventario: number, filterSetor?: string, excludeSetorList?: string[]) {
+// Permite filtrar por setor ou excluir determinados setores
+async function fetchContagem(
+  table: string, 
+  cod_inventario: number, 
+  filterSetor?: string, 
+  excludeSetorList?: string[]
+): Promise<any[]> {
   const { data, error } = await supabase
     .from(table)
     .select('*')
@@ -45,7 +52,12 @@ async function fetchContagem(table: string, cod_inventario: number, filterSetor?
 }
 
 // Função para buscar dados de trânsito (ativo_dadostransito)
-async function fetchTransito(table: string, cod_inventario: number, setor: string, tipo: string) {
+async function fetchTransito(
+  table: string, 
+  cod_inventario: number, 
+  setor: string, 
+  tipo: string
+): Promise<any[]> {
   const { data, error } = await supabase
     .from(table)
     .select('*')
@@ -58,7 +70,12 @@ async function fetchTransito(table: string, cod_inventario: number, setor: strin
 }
 
 // Função para buscar dados de fornecedores (ativo_fornecedores)
-async function fetchFornecedores(table: string, cod_inventario: number, fornecedor: string, ativo: string) {
+async function fetchFornecedores(
+  table: string, 
+  cod_inventario: number, 
+  fornecedor: string, 
+  ativo: string
+): Promise<any[]> {
   const { data, error } = await supabase
     .from(table)
     .select('*')
@@ -71,7 +88,7 @@ async function fetchFornecedores(table: string, cod_inventario: number, forneced
 }
 
 // Função para buscar registro de resultado já existente para o inventário atual e modo
-async function getResultadoAtual(cod_inventario: number, mode: string) {
+async function getResultadoAtual(cod_inventario: number, mode: string): Promise<any> {
   const { data, error } = await supabase
     .from('ativo_resultado_inv')
     .select('*')
@@ -82,19 +99,20 @@ async function getResultadoAtual(cod_inventario: number, mode: string) {
   return data && data.length > 0 ? data[0] : null
 }
 
-
-function groupBySetor(rows: any[], field623: string, field618: string) {
-    const grouped: { [setor: string]: { caixa623: number, caixa618: number } } = {}
-    for (const row of rows) {
-      const setor = row.setor
-      if (!grouped[setor]) {
-        grouped[setor] = { caixa623: 0, caixa618: 0 }
-      }
-      grouped[setor].caixa623 += row[field623] || 0
-      grouped[setor].caixa618 += row[field618] || 0
+// Função genérica para agrupar registros por setor, considerando dois campos
+function groupBySetor(rows: any[], field1: string, field2: string): { [setor: string]: { value1: number, value2: number } } {
+  const grouped: { [setor: string]: { value1: number, value2: number } } = {}
+  for (const row of rows) {
+    const setor = row.setor
+    if (!grouped[setor]) {
+      grouped[setor] = { value1: 0, value2: 0 }
     }
-    return grouped
+    grouped[setor].value1 += row[field1] || 0
+    grouped[setor].value2 += row[field2] || 0
   }
+  console.log(`[groupBySetor] Agrupado por setor:`, grouped)
+  return grouped
+}
 
 export async function POST(request: Request) {
   try {
@@ -104,7 +122,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Parâmetro 'mode' inválido. Use 'inventariohb' ou 'inventariohnt'." }, { status: 400 })
     }
     
-    // Usaremos o cod_inventario mais recente da tabela ativo_inventario_hb
+    // Obtemos o inventário atual (maior cod_inventario da tabela ativo_inventario_hb)
     const currentInventario = await getMaxCod('ativo_inventario_hb')
     console.log(`[POST] Inventário atual: ${currentInventario}`)
 
@@ -113,106 +131,184 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Inventário atual já finalizado." }, { status: 400 })
     }
 
-    // Declaração dos agrupamentos de detalhamento para inventariohb
-    let resultado_lojas: { [setor: string]: { caixa623: number, caixa618: number } } = {}
-    let total_lojas_623 = 0, total_lojas_618 = 0
-    let resultado_CD_ES: { contagem: { caixa623: number, caixa618: number }, transito: { caixa623: number, caixa618: number }, fornecedor: { caixa623: number, caixa618: number }, total: { caixa623: number, caixa618: number } } = {
-      contagem: { caixa623: 0, caixa618: 0 },
-      transito: { caixa623: 0, caixa618: 0 },
-      fornecedor: { caixa623: 0, caixa618: 0 },
-      total: { caixa623: 0, caixa618: 0 }
+    // Variáveis para os totais finais e detalhamento
+    let total1 = 0  // para ativo 1 (inventariohb: caixa_hb_623, inventariohnt: caixa_hnt_g)
+    let total2 = 0  // para ativo 2 (inventariohb: caixa_hb_618, inventariohnt: caixa_hnt_p)
+
+    let resultado_lojas: { [setor: string]: { value1: number, value2: number } } = {}
+    let total_lojas_1 = 0, total_lojas_2 = 0
+
+    let resultado_CD_ES: { 
+      contagem: { value1: number, value2: number },
+      transito: { value1: number, value2: number },
+      fornecedor: { value1: number, value2: number },
+      total: { value1: number, value2: number }
+    } = {
+      contagem: { value1: 0, value2: 0 },
+      transito: { value1: 0, value2: 0 },
+      fornecedor: { value1: 0, value2: 0 },
+      total: { value1: 0, value2: 0 },
     }
     let resultado_CD_SP = { 
-      contagem: { caixa623: 0, caixa618: 0 },
-      transito: { caixa623: 0, caixa618: 0 },
-      fornecedor: { caixa623: 0, caixa618: 0 },
-      total: { caixa623: 0, caixa618: 0 }
+      contagem: { value1: 0, value2: 0 },
+      transito: { value1: 0, value2: 0 },
+      fornecedor: { value1: 0, value2: 0 },
+      total: { value1: 0, value2: 0 },
     }
     let resultado_CD_RJ = { 
-      contagem: { caixa623: 0, caixa618: 0 },
-      transito: { caixa623: 0, caixa618: 0 },
-      fornecedor: { caixa623: 0, caixa618: 0 },
-      total: { caixa623: 0, caixa618: 0 }
+      contagem: { value1: 0, value2: 0 },
+      transito: { value1: 0, value2: 0 },
+      fornecedor: { value1: 0, value2: 0 },
+      total: { value1: 0, value2: 0 },
     }
 
-    let total1 = 0  // para "CAIXA HB 623"
-    let total2 = 0  // para "CAIXA HB 618"
-
+    // Processamento para cada modo
     if (mode === "inventariohb") {
       console.log("[POST] Processando inventariohb")
-      // Dados de lojas (não regionais)
+      // Para inventariohb:
+      // - Contagem: campos: caixa_hb_623 e caixa_hb_618
+      // - Transito e Fornecedor: tipos: "CAIXA HB 623" e "CAIXA HB 618"
       const rowsLojas = await fetchContagem('ativo_contagemlojas', currentInventario, undefined, ["CD SP", "CD ES", "CD PAVUNA"])
       resultado_lojas = groupBySetor(rowsLojas, 'caixa_hb_623', 'caixa_hb_618')
       for (const setor in resultado_lojas) {
-        total_lojas_623 += resultado_lojas[setor].caixa623
-        total_lojas_618 += resultado_lojas[setor].caixa618
+        total_lojas_1 += resultado_lojas[setor].value1
+        total_lojas_2 += resultado_lojas[setor].value2
       }
       
-      // Dados regionais para CD ES
+      // Regional CD ES
       const rowsES = await fetchContagem('ativo_contagemlojas', currentInventario, "CD ES")
-      const es_contagem_623 = sumField(rowsES, 'caixa_hb_623')
-      const es_contagem_618 = sumField(rowsES, 'caixa_hb_618')
-      const es_transito_623 = sumField(await fetchTransito('ativo_dadostransito', currentInventario, "CD ES", "CAIXA HB 623"), 'quantidade')
-      const es_transito_618 = sumField(await fetchTransito('ativo_dadostransito', currentInventario, "CD ES", "CAIXA HB 618"), 'quantidade')
-      const es_fornecedor_623 = sumField(await fetchFornecedores('ativo_fornecedores', currentInventario, "FORNECEDORES ES", "CAIXA HB 623"), 'quantidade')
-      const es_fornecedor_618 = sumField(await fetchFornecedores('ativo_fornecedores', currentInventario, "FORNECEDORES ES", "CAIXA HB 618"), 'quantidade')
+      const es_contagem_1 = sumField(rowsES, 'caixa_hb_623')
+      const es_contagem_2 = sumField(rowsES, 'caixa_hb_618')
+      const es_transito_1 = sumField(await fetchTransito('ativo_dadostransito', currentInventario, "CD ES", "CAIXA HB 623"), 'quantidade')
+      const es_transito_2 = sumField(await fetchTransito('ativo_dadostransito', currentInventario, "CD ES", "CAIXA HB 618"), 'quantidade')
+      const es_fornecedor_1 = sumField(await fetchFornecedores('ativo_fornecedores', currentInventario, "FORNECEDORES ES", "CAIXA HB 623"), 'quantidade')
+      const es_fornecedor_2 = sumField(await fetchFornecedores('ativo_fornecedores', currentInventario, "FORNECEDORES ES", "CAIXA HB 618"), 'quantidade')
       resultado_CD_ES = {
-        contagem: { caixa623: es_contagem_623, caixa618: es_contagem_618 },
-        transito: { caixa623: es_transito_623, caixa618: es_transito_618 },
-        fornecedor: { caixa623: es_fornecedor_623, caixa618: es_fornecedor_618 },
+        contagem: { value1: es_contagem_1, value2: es_contagem_2 },
+        transito: { value1: es_transito_1, value2: es_transito_2 },
+        fornecedor: { value1: es_fornecedor_1, value2: es_fornecedor_2 },
         total: {
-          caixa623: es_contagem_623 + es_transito_623 + es_fornecedor_623,
-          caixa618: es_contagem_618 + es_transito_618 + es_fornecedor_618,
+          value1: es_contagem_1 + es_transito_1 + es_fornecedor_1,
+          value2: es_contagem_2 + es_transito_2 + es_fornecedor_2,
         }
       }
       
-      // Dados regionais para CD SP
+      // Regional CD SP
       const rowsSP = await fetchContagem('ativo_contagemlojas', currentInventario, "CD SP")
-      const sp_contagem_623 = sumField(rowsSP, 'caixa_hb_623')
-      const sp_contagem_618 = sumField(rowsSP, 'caixa_hb_618')
-      const sp_transito_623 = sumField(await fetchTransito('ativo_dadostransito', currentInventario, "CD SP", "CAIXA HB 623"), 'quantidade')
-      const sp_transito_618 = sumField(await fetchTransito('ativo_dadostransito', currentInventario, "CD SP", "CAIXA HB 618"), 'quantidade')
-      const sp_fornecedor_623 = sumField(await fetchFornecedores('ativo_fornecedores', currentInventario, "FORNECEDORES SP", "CAIXA HB 623"), 'quantidade')
-      const sp_fornecedor_618 = sumField(await fetchFornecedores('ativo_fornecedores', currentInventario, "FORNECEDORES SP", "CAIXA HB 618"), 'quantidade')
+      const sp_contagem_1 = sumField(rowsSP, 'caixa_hb_623')
+      const sp_contagem_2 = sumField(rowsSP, 'caixa_hb_618')
+      const sp_transito_1 = sumField(await fetchTransito('ativo_dadostransito', currentInventario, "CD SP", "CAIXA HB 623"), 'quantidade')
+      const sp_transito_2 = sumField(await fetchTransito('ativo_dadostransito', currentInventario, "CD SP", "CAIXA HB 618"), 'quantidade')
+      const sp_fornecedor_1 = sumField(await fetchFornecedores('ativo_fornecedores', currentInventario, "FORNECEDORES SP", "CAIXA HB 623"), 'quantidade')
+      const sp_fornecedor_2 = sumField(await fetchFornecedores('ativo_fornecedores', currentInventario, "FORNECEDORES SP", "CAIXA HB 618"), 'quantidade')
       resultado_CD_SP = {
-        contagem: { caixa623: sp_contagem_623, caixa618: sp_contagem_618 },
-        transito: { caixa623: sp_transito_623, caixa618: sp_transito_618 },
-        fornecedor: { caixa623: sp_fornecedor_623, caixa618: sp_fornecedor_618 },
+        contagem: { value1: sp_contagem_1, value2: sp_contagem_2 },
+        transito: { value1: sp_transito_1, value2: sp_transito_2 },
+        fornecedor: { value1: sp_fornecedor_1, value2: sp_fornecedor_2 },
         total: {
-          caixa623: sp_contagem_623 + sp_transito_623 + sp_fornecedor_623,
-          caixa618: sp_contagem_618 + sp_transito_618 + sp_fornecedor_618,
+          value1: sp_contagem_1 + sp_transito_1 + sp_fornecedor_1,
+          value2: sp_contagem_2 + sp_transito_2 + sp_fornecedor_2,
         }
       }
       
-      // Dados regionais para CD RJ (setor "CD PAVUNA")
+      // Regional CD RJ (setor "CD PAVUNA")
       const rowsRJ = await fetchContagem('ativo_contagemlojas', currentInventario, "CD PAVUNA")
-      const rj_contagem_623 = sumField(rowsRJ, 'caixa_hb_623')
-      const rj_contagem_618 = sumField(rowsRJ, 'caixa_hb_618')
-      const rj_transito_623 = sumField(await fetchTransito('ativo_dadostransito', currentInventario, "CD PAVUNA", "CAIXA HB 623"), 'quantidade')
-      const rj_transito_618 = sumField(await fetchTransito('ativo_dadostransito', currentInventario, "CD PAVUNA", "CAIXA HB 618"), 'quantidade')
-      const rj_fornecedor_623 = sumField(await fetchFornecedores('ativo_fornecedores', currentInventario, "FORNECEDORES RJ", "CAIXA HB 623"), 'quantidade')
-      const rj_fornecedor_618 = sumField(await fetchFornecedores('ativo_fornecedores', currentInventario, "FORNECEDORES RJ", "CAIXA HB 618"), 'quantidade')
+      const rj_contagem_1 = sumField(rowsRJ, 'caixa_hb_623')
+      const rj_contagem_2 = sumField(rowsRJ, 'caixa_hb_618')
+      const rj_transito_1 = sumField(await fetchTransito('ativo_dadostransito', currentInventario, "CD PAVUNA", "CAIXA HB 623"), 'quantidade')
+      const rj_transito_2 = sumField(await fetchTransito('ativo_dadostransito', currentInventario, "CD PAVUNA", "CAIXA HB 618"), 'quantidade')
+      const rj_fornecedor_1 = sumField(await fetchFornecedores('ativo_fornecedores', currentInventario, "FORNECEDORES RJ", "CAIXA HB 623"), 'quantidade')
+      const rj_fornecedor_2 = sumField(await fetchFornecedores('ativo_fornecedores', currentInventario, "FORNECEDORES RJ", "CAIXA HB 618"), 'quantidade')
       resultado_CD_RJ = {
-        contagem: { caixa623: rj_contagem_623, caixa618: rj_contagem_618 },
-        transito: { caixa623: rj_transito_623, caixa618: rj_transito_618 },
-        fornecedor: { caixa623: rj_fornecedor_623, caixa618: rj_fornecedor_618 },
+        contagem: { value1: rj_contagem_1, value2: rj_contagem_2 },
+        transito: { value1: rj_transito_1, value2: rj_transito_2 },
+        fornecedor: { value1: rj_fornecedor_1, value2: rj_fornecedor_2 },
         total: {
-          caixa623: rj_contagem_623 + rj_transito_623 + rj_fornecedor_623,
-          caixa618: rj_contagem_618 + rj_transito_618 + rj_fornecedor_618,
+          value1: rj_contagem_1 + rj_transito_1 + rj_fornecedor_1,
+          value2: rj_contagem_2 + rj_transito_2 + rj_fornecedor_2,
         }
       }
       
-      // Consolidação final: soma dos dados de lojas e de cada regional
-      const total_final_623 = total_lojas_623 + resultado_CD_ES.total.caixa623 + resultado_CD_SP.total.caixa623 + resultado_CD_RJ.total.caixa623
-      const total_final_618 = total_lojas_618 + resultado_CD_ES.total.caixa618 + resultado_CD_SP.total.caixa618 + resultado_CD_RJ.total.caixa618
+      const total_final_1 = total_lojas_1 + resultado_CD_ES.total.value1 + resultado_CD_SP.total.value1 + resultado_CD_RJ.total.value1
+      const total_final_2 = total_lojas_2 + resultado_CD_ES.total.value2 + resultado_CD_SP.total.value2 + resultado_CD_RJ.total.value2
       
-      total1 = total_final_623
-      total2 = total_final_618
+      total1 = total_final_1
+      total2 = total_final_2
       
-      console.log("[inventariohb] Totais finais:", { total_final_623, total_final_618 })
+      console.log("[inventariohb] Totais finais:", { total_final_1, total_final_2 })
     } else {
       console.log("[POST] Processando inventariohnt")
-      // Implementação similar para inventariohnt (não detalhada aqui)
+      // Para inventariohnt, os campos são:
+      // - Contagem: campos: caixa_hnt_g e caixa_hnt_p
+      // - Transito e Fornecedor: tipos: "CAIXA HNT G" e "CAIXA HNT P"
+      const rowsLojas = await fetchContagem('ativo_contagemlojas', currentInventario, undefined, ["CD SP", "CD ES", "CD PAVUNA"])
+      resultado_lojas = groupBySetor(rowsLojas, 'caixa_hnt_g', 'caixa_hnt_p')
+      for (const setor in resultado_lojas) {
+        total_lojas_1 += resultado_lojas[setor].value1
+        total_lojas_2 += resultado_lojas[setor].value2
+      }
+      
+      // Regional CD ES
+      const rowsES = await fetchContagem('ativo_contagemlojas', currentInventario, "CD ES")
+      const es_contagem_1 = sumField(rowsES, 'caixa_hnt_g')
+      const es_contagem_2 = sumField(rowsES, 'caixa_hnt_p')
+      const es_transito_1 = sumField(await fetchTransito('ativo_dadostransito', currentInventario, "CD ES", "CAIXA HNT G"), 'quantidade')
+      const es_transito_2 = sumField(await fetchTransito('ativo_dadostransito', currentInventario, "CD ES", "CAIXA HNT P"), 'quantidade')
+      const es_fornecedor_1 = sumField(await fetchFornecedores('ativo_fornecedores', currentInventario, "FORNECEDORES ES", "CAIXA HNT G"), 'quantidade')
+      const es_fornecedor_2 = sumField(await fetchFornecedores('ativo_fornecedores', currentInventario, "FORNECEDORES ES", "CAIXA HNT P"), 'quantidade')
+      resultado_CD_ES = {
+        contagem: { value1: es_contagem_1, value2: es_contagem_2 },
+        transito: { value1: es_transito_1, value2: es_transito_2 },
+        fornecedor: { value1: es_fornecedor_1, value2: es_fornecedor_2 },
+        total: {
+          value1: es_contagem_1 + es_transito_1 + es_fornecedor_1,
+          value2: es_contagem_2 + es_transito_2 + es_fornecedor_2,
+        }
+      }
+      
+      // Regional CD SP
+      const rowsSP = await fetchContagem('ativo_contagemlojas', currentInventario, "CD SP")
+      const sp_contagem_1 = sumField(rowsSP, 'caixa_hnt_g')
+      const sp_contagem_2 = sumField(rowsSP, 'caixa_hnt_p')
+      const sp_transito_1 = sumField(await fetchTransito('ativo_dadostransito', currentInventario, "CD SP", "CAIXA HNT G"), 'quantidade')
+      const sp_transito_2 = sumField(await fetchTransito('ativo_dadostransito', currentInventario, "CD SP", "CAIXA HNT P"), 'quantidade')
+      const sp_fornecedor_1 = sumField(await fetchFornecedores('ativo_fornecedores', currentInventario, "FORNECEDORES SP", "CAIXA HNT G"), 'quantidade')
+      const sp_fornecedor_2 = sumField(await fetchFornecedores('ativo_fornecedores', currentInventario, "FORNECEDORES SP", "CAIXA HNT P"), 'quantidade')
+      resultado_CD_SP = {
+        contagem: { value1: sp_contagem_1, value2: sp_contagem_2 },
+        transito: { value1: sp_transito_1, value2: sp_transito_2 },
+        fornecedor: { value1: sp_fornecedor_1, value2: sp_fornecedor_2 },
+        total: {
+          value1: sp_contagem_1 + sp_transito_1 + sp_fornecedor_1,
+          value2: sp_contagem_2 + sp_transito_2 + sp_fornecedor_2,
+        }
+      }
+      
+      // Regional CD RJ (setor "CD PAVUNA")
+      const rowsRJ = await fetchContagem('ativo_contagemlojas', currentInventario, "CD PAVUNA")
+      const rj_contagem_1 = sumField(rowsRJ, 'caixa_hnt_g')
+      const rj_contagem_2 = sumField(rowsRJ, 'caixa_hnt_p')
+      const rj_transito_1 = sumField(await fetchTransito('ativo_dadostransito', currentInventario, "CD PAVUNA", "CAIXA HNT G"), 'quantidade')
+      const rj_transito_2 = sumField(await fetchTransito('ativo_dadostransito', currentInventario, "CD PAVUNA", "CAIXA HNT P"), 'quantidade')
+      const rj_fornecedor_1 = sumField(await fetchFornecedores('ativo_fornecedores', currentInventario, "FORNECEDORES RJ", "CAIXA HNT G"), 'quantidade')
+      const rj_fornecedor_2 = sumField(await fetchFornecedores('ativo_fornecedores', currentInventario, "FORNECEDORES RJ", "CAIXA HNT P"), 'quantidade')
+      resultado_CD_RJ = {
+        contagem: { value1: rj_contagem_1, value2: rj_contagem_2 },
+        transito: { value1: rj_transito_1, value2: rj_transito_2 },
+        fornecedor: { value1: rj_fornecedor_1, value2: rj_fornecedor_2 },
+        total: {
+          value1: rj_contagem_1 + rj_transito_1 + rj_fornecedor_1,
+          value2: rj_contagem_2 + rj_transito_2 + rj_fornecedor_2,
+        }
+      }
+      
+      const total_final_1 = total_lojas_1 + resultado_CD_ES.total.value1 + resultado_CD_SP.total.value1 + resultado_CD_RJ.total.value1
+      const total_final_2 = total_lojas_2 + resultado_CD_ES.total.value2 + resultado_CD_SP.total.value2 + resultado_CD_RJ.total.value2
+      
+      total1 = total_final_1
+      total2 = total_final_2
+      
+      console.log("[inventariohnt] Totais finais:", { total_final_1, total_final_2 })
     }
 
     // Busca o resultado anterior para calcular a diferença, se existir
@@ -228,8 +324,13 @@ export async function POST(request: Request) {
     
     let diff1 = null, diff2 = null
     if (prevResult) {
-      diff1 = total1 - prevResult.caixa_hb_623
-      diff2 = total2 - prevResult.caixa_hb_618
+      if (mode === "inventariohb") {
+        diff1 = total1 - prevResult.caixa_hb_623
+        diff2 = total2 - prevResult.caixa_hb_618
+      } else {
+        diff1 = total1 - prevResult.caixa_hnt_g
+        diff2 = total2 - prevResult.caixa_hnt_p
+      }
     }
     console.log("[POST] Diferenças calculadas:", { diff1, diff2 })
 
@@ -238,10 +339,19 @@ export async function POST(request: Request) {
       cod_inventario: currentInventario,
       mode,
       created_at: new Date().toISOString(),
-      caixa_hb_623: total1,
-      caixa_hb_618: total2,
-      diff_caixa_hb_623: diff1,
-      diff_caixa_hb_618: diff2,
+      ...(mode === "inventariohb"
+        ? {
+            caixa_hb_623: total1,
+            caixa_hb_618: total2,
+            diff_caixa_hb_623: diff1,
+            diff_caixa_hb_618: diff2,
+          }
+        : {
+            caixa_hnt_g: total1,
+            caixa_hnt_p: total2,
+            diff_caixa_hnt_g: diff1,
+            diff_caixa_hnt_p: diff2,
+          }),
     }
     console.log("[POST] Objeto a inserir:", insertObj)
 
@@ -251,12 +361,11 @@ export async function POST(request: Request) {
     if (insertError) throw new Error(insertError.message)
     console.log("[POST] Registro inserido:", insertData)
 
-    // Prepara o objeto de detalhamento para retornar no JSON (não inserido no banco)
     const detalhes = {
-      resultado_lojas: resultado_lojas,
+      resultado_lojas,
       resultado_CD_ES,
       resultado_CD_SP,
-      resultado_CD_RJ
+      resultado_CD_RJ,
     }
     console.log("[POST] Detalhamento:", detalhes)
 
@@ -266,5 +375,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
-
-

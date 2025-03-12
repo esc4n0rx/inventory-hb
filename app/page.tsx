@@ -33,13 +33,27 @@ interface StatusInventario {
   color: string
 }
 
+interface InventoryRow {
+  tipo: string
+  contagemLojas: number
+  contagemCD: number
+  transitoSP: number
+  transitoES: number
+  fornecedores: number
+  diferenca: number | string
+  status: string
+}
+
 interface DashboardData {
   totalAtivos: number
   itensFaltantes: number
   itensConferidos: number
   emInventario: number
   statusInventario: StatusInventario[]
-  distribuicaoAtivos: any[]
+  distribuicaoAtivos: {
+    caixa_hb_623: number
+    caixa_hb_618: number
+  }
 }
 
 interface AcompanhamentoResponse {
@@ -99,6 +113,24 @@ export default function Home() {
     { name: "Em Contagem", value: 0, color: "hsl(var(--chart-2))" },
     { name: "Pendentes", value: 0, color: "hsl(var(--chart-3))" },
   ]
+
+
+    const comp = dashboardData?.distribuicaoAtivos as {
+      caixa_hb_623: number
+      caixa_hb_618: number
+    } | undefined
+  let comparativoData: { name: string; value: number }[] = []
+  if (dashboardData && dashboardData.distribuicaoAtivos) {
+    const comp = dashboardData.distribuicaoAtivos
+    if (comp.caixa_hb_623 === 0 && comp.caixa_hb_618 === 0) {
+      comparativoData = []
+    } else {
+      comparativoData = [
+        { name: "CAIXA HB 623", value: comp.caixa_hb_623 },
+        { name: "CAIXA HB 618", value: comp.caixa_hb_618 },
+      ]
+    }
+  }
 
   const handleStatusModal = async () => {
     try {
@@ -216,24 +248,24 @@ export default function Home() {
                 variants={container}
                 initial="hidden"
                 animate="show"
-                className="grid gap-6 md:grid-cols-2 mb-8"
+                className="mb-8"
               >
-                <motion.div variants={item}>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Distribuição de Ativos</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Comparativo de Inventário</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {comparativoData.length === 0 ? (
+                      <div className="h-[400px] flex items-center justify-center text-center text-sm text-muted-foreground">
+                        Não há dados ainda
+                      </div>
+                    ) : (
                       <div className="h-[400px]">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={barData} margin={{ left: 20 }}>
+                          <BarChart data={comparativoData} margin={{ left: 20 }}>
                             <CartesianGrid strokeDasharray="3 3" opacity={0.4} />
                             <XAxis 
                               dataKey="name" 
-                              angle={-45}
-                              textAnchor="end"
-                              height={80}
-                              interval={0}
                               tick={{ fontSize: 12 }}
                             />
                             <YAxis />
@@ -245,24 +277,26 @@ export default function Home() {
                             />
                             <Legend />
                             <Bar 
-                              name="Quantidade Atual" 
-                              dataKey="quantidade" 
+                              name="Comparativo" 
+                              dataKey="value" 
                               fill="hsl(var(--chart-1))"
-                              radius={[4, 4, 0, 0]}
-                            />
-                            <Bar 
-                              name="Quantidade Esperada" 
-                              dataKey="esperado" 
-                              fill="hsl(var(--chart-2))"
                               radius={[4, 4, 0, 0]}
                             />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
 
+              {/* Gráfico de Status do Inventário */}
+              <motion.div
+                variants={container}
+                initial="hidden"
+                animate="show"
+                className="grid gap-6 md:grid-cols-2 mb-8"
+              >
                 <motion.div variants={item}>
                   <Card>
                     <CardHeader>

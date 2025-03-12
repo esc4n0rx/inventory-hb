@@ -25,7 +25,6 @@ export async function GET(request: Request) {
   const { data: lojasFinalizadas, error: errorLojas } = await supabase
     .from('ativo_contagemlojas')
     .select('setor')
-
   if (errorLojas) {
     return NextResponse.json({ error: errorLojas.message }, { status: 500 })
   }
@@ -34,7 +33,6 @@ export async function GET(request: Request) {
   const { data: setoresFinalizados, error: errorSetores } = await supabase
     .from('ativo_inventario_hb')
     .select('setor')
-
   if (errorSetores) {
     return NextResponse.json({ error: errorSetores.message }, { status: 500 })
   }
@@ -43,7 +41,6 @@ export async function GET(request: Request) {
   const finishedLojasSet = new Set(
     lojasFinalizadas.map((item) => normalizeString(item.setor))
   )
-
   const finishedSetoresSet = new Set(
     setoresFinalizados.map((item) => normalizeString(item.setor))
   )
@@ -76,7 +73,6 @@ export async function GET(request: Request) {
     !finishedSetoresSet.has(normalizeString(setor))
   )
 
-  // Gerar a mensagem de log com análise detalhada
   const timestamp = new Date().toISOString()
   const logMessage = `[${timestamp}] Análise do Dashboard:\n` +
     `Lojas:\n` +
@@ -88,19 +84,35 @@ export async function GET(request: Request) {
     `- Conferidos (${finishedSetores}): ${finishedSetoresNames.join(', ')}\n` +
     `- Pendentes (${pendingSetores}): ${pendingSetoresNames.join(', ')}\n\n`
 
-  // Estrutura de resposta para a dashboard com cores definidas
+  // Dados comparativos do inventário:
+  // Busca os 2 últimos registros da tabela ativo_resultado_inv para o mode "inventariohb"
+  const { data: resultados, error: errorResultados } = await supabase
+    .from('ativo_resultado_inv')
+    .select('*')
+    .eq('mode', 'inventariohb')
+    .order('cod_inventario', { ascending: false })
+    .limit(2)
+  
+  let comparativo = { caixa_hb_623: 0, caixa_hb_618: 0 }
+  if (!errorResultados && resultados && resultados.length === 2) {
+    const [atual, anterior] = resultados
+    comparativo = {
+      caixa_hb_623: atual.caixa_hb_623 - anterior.caixa_hb_623,
+      caixa_hb_618: atual.caixa_hb_618 - anterior.caixa_hb_618,
+    }
+  }
+
   const responseData = {
     totalAtivos: finishedLojas, // Total de Lojas Finalizadas
     itensFaltantes: pendingLojas, // Lojas pendentes
     itensConferidos: finishedSetores, // Setores já contados
     emInventario: pendingSetores, // Setores pendentes
-    // Dados para o gráfico "Status do Inventário" com cores definidas
     statusInventario: [
       { name: 'Conferidos', value: finishedSetores, color: "hsl(var(--chart-1))" },
       { name: 'Em Contagem', value: pendingSetores, color: "hsl(var(--chart-2))" },
       { name: 'Pendentes', value: pendingLojas, color: "hsl(var(--chart-3))" },
     ],
-    distribuicaoAtivos: [] // Implementação futura
+    distribuicaoAtivos: comparativo, // Dados comparativos do inventário
   }
 
   return NextResponse.json(responseData)

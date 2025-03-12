@@ -50,6 +50,10 @@ export default function Inventory() {
   const [loadingFinal, setLoadingFinal] = useState<boolean>(false)
   const [selectedMode, setSelectedMode] = useState<string>("inventariohb")
 
+  // Labels dinâmicos
+  const ativo1Label = selectedMode === "inventariohb" ? "CAIXA HB 623" : "CAIXA HNT G"
+  const ativo2Label = selectedMode === "inventariohb" ? "CAIXA HB 618" : "CAIXA HNT P"
+
   // Busca os dados gerais do inventário
   useEffect(() => {
     async function fetchInventory() {
@@ -57,6 +61,7 @@ export default function Inventory() {
         const res = await fetch("/api/inventario")
         const data: ApiInventoryResponse = await res.json()
 
+        // Lista de ativos fixos para exibição (o rótulo da tabela não muda, pois é o resumo geral)
         const assetTypes = [
           "CAIXA HB 623",
           "CAIXA HB 618",
@@ -154,68 +159,36 @@ export default function Inventory() {
   // Função para copiar o conteúdo formatado do resultado para a área de transferência
   const handleCopyToEmail = () => {
     if (finalData) {
-      // Formata o conteúdo de forma organizada
       const { result, detalhes } = finalData
       let text = `Resultado Final do Inventário\n\n`
       text += `Inventário: ${result.cod_inventario}\n`
       text += `Modo: ${result.mode}\n`
       text += `Data: ${result.created_at}\n\n`
       text += `Totais:\n`
-      text += `CAIXA HB 623: ${result.caixa_hb_623}\n`
-      text += `CAIXA HB 618: ${result.caixa_hb_618}\n\n`
-      if (detalhes) {
-        text += `--- Detalhamento por Regional ---\n`
-        for (const reg of ["resultado_CD_ES", "resultado_CD_SP", "resultado_CD_RJ"]) {
-          const d = detalhes[reg]
-          text += `${reg.replace("resultado_", "")}\n`
-          text += `Contagem: 623: ${d.contagem?.caixa623 || 0} / 618: ${d.contagem?.caixa618 || 0}\n`
-          text += `Transito: 623: ${d.transito?.caixa623 || 0} / 618: ${d.transito?.caixa618 || 0}\n`
-          text += `Fornecedor: 623: ${d.fornecedor?.caixa623 || 0} / 618: ${d.fornecedor?.caixa618 || 0}\n`
-          text += `Total: 623: ${d.total?.caixa623 || 0} / 618: ${d.total?.caixa618 || 0}\n\n`
-        }
-        text += `--- Lojas ---\n`
-        for (const loja in detalhes.resultado_lojas) {
-          const valores = detalhes.resultado_lojas[loja]
-          text += `${loja}: 623: ${valores.caixa623} / 618: ${valores.caixa618}\n`
-        }
+      if (selectedMode === "inventariohb") {
+        text += `${ativo1Label}: ${result.caixa_hb_623}\n`
+        text += `${ativo2Label}: ${result.caixa_hb_618}\n\n`
+      } else {
+        text += `${ativo1Label}: ${result.caixa_hnt_g}\n`
+        text += `${ativo2Label}: ${result.caixa_hnt_p}\n\n`
+      }
+      text += `--- Detalhamento por Regional ---\n`
+      for (const reg of ["resultado_CD_ES", "resultado_CD_SP", "resultado_CD_RJ"]) {
+        const d = detalhes[reg]
+        text += `${reg.replace("resultado_", "")}\n`
+        text += `Contagem: ${ativo1Label}: ${d.contagem?.value1 || 0} / ${ativo2Label}: ${d.contagem?.value2 || 0}\n`
+        text += `Transito: ${ativo1Label}: ${d.transito?.value1 || 0} / ${ativo2Label}: ${d.transito?.value2 || 0}\n`
+        text += `Fornecedor: ${ativo1Label}: ${d.fornecedor?.value1 || 0} / ${ativo2Label}: ${d.fornecedor?.value2 || 0}\n`
+        text += `Total: ${ativo1Label}: ${d.total?.value1 || 0} / ${ativo2Label}: ${d.total?.value2 || 0}\n\n`
+      }
+      text += `--- Lojas ---\n`
+      for (const loja in detalhes.resultado_lojas) {
+        const valores = detalhes.resultado_lojas[loja]
+        text += `${loja}: ${ativo1Label}: ${valores.value1} / ${ativo2Label}: ${valores.value2}\n`
       }
       navigator.clipboard.writeText(text)
     }
   }
-
-  // Componente para exibir um card regional
-  const RegionalCard = ({ title, data }: { title: string, data: { contagem: { caixa623: number, caixa618: number }, transito: { caixa623: number, caixa618: number }, fornecedor: { caixa623: number, caixa618: number }, total: { caixa623: number, caixa618: number } } }) => (
-    <Card className="m-2 flex-1">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="text-sm space-y-1">
-        <div>Contagem: 623: {data.contagem.caixa623} / 618: {data.contagem.caixa618}</div>
-        <div>Transito: 623: {data.transito.caixa623} / 618: {data.transito.caixa618}</div>
-        <div>Fornecedor: 623: {data.fornecedor.caixa623} / 618: {data.fornecedor.caixa618}</div>
-        <div>Total: 623: {data.total.caixa623} / 618: {data.total.caixa618}</div>
-      </CardContent>
-    </Card>
-  )
-
-  // Componente para exibir o card de lojas com rolagem
-  const LojasCard = ({ data }: { data: { [loja: string]: { caixa623: number, caixa618: number } } }) => (
-    <Card className="m-2 flex-1">
-      <CardHeader>
-        <CardTitle>Lojas</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="max-h-64 overflow-y-auto text-sm">
-          {Object.entries(data).map(([loja, valores]) => (
-            <div key={loja} className="flex justify-between border-b py-1">
-              <span>{loja}</span>
-              <span>623: {valores.caixa623} / 618: {valores.caixa618}</span>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  )
 
   return (
     <div className="min-h-screen bg-background">
@@ -323,11 +296,11 @@ export default function Inventory() {
             ) : finalData && finalData.detalhes ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Card para cada regional */}
-                <RegionalCard title="CD ES" data={finalData.detalhes.resultado_CD_ES} />
-                <RegionalCard title="CD SP" data={finalData.detalhes.resultado_CD_SP} />
-                <RegionalCard title="CD RJ" data={finalData.detalhes.resultado_CD_RJ} />
+                <RegionalCard title="CD ES" data={finalData.detalhes.resultado_CD_ES} label1={ativo1Label} label2={ativo2Label} />
+                <RegionalCard title="CD SP" data={finalData.detalhes.resultado_CD_SP} label1={ativo1Label} label2={ativo2Label} />
+                <RegionalCard title="CD RJ" data={finalData.detalhes.resultado_CD_RJ} label1={ativo1Label} label2={ativo2Label} />
                 {/* Card para Lojas */}
-                <LojasCard data={finalData.detalhes.resultado_lojas} />
+                <LojasCard data={finalData.detalhes.resultado_lojas} label1={ativo1Label} label2={ativo2Label} />
               </div>
             ) : (
               <p>Nenhum resultado disponível.</p>
@@ -383,25 +356,34 @@ export default function Inventory() {
   )
 }
 
-// Componente para exibir card regional
-function RegionalCard({ title, data }: { title: string, data: { contagem: { caixa623: number, caixa618: number }, transito: { caixa623: number, caixa618: number }, fornecedor: { caixa623: number, caixa618: number }, total: { caixa623: number, caixa618: number } } }) {
+// Componente para exibir card regional com rótulos dinâmicos
+function RegionalCard({ title, data, label1, label2 }: { 
+  title: string, 
+  data: { contagem: { value1: number, value2: number }, transito: { value1: number, value2: number }, fornecedor: { value1: number, value2: number }, total: { value1: number, value2: number } }, 
+  label1: string, 
+  label2: string 
+}) {
   return (
     <Card className="m-2">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent className="text-sm space-y-1">
-        <div><strong>Contagem:</strong> 623: {data.contagem.caixa623} / 618: {data.contagem.caixa618}</div>
-        <div><strong>Transito:</strong> 623: {data.transito.caixa623} / 618: {data.transito.caixa618}</div>
-        <div><strong>Fornecedor:</strong> 623: {data.fornecedor.caixa623} / 618: {data.fornecedor.caixa618}</div>
-        <div><strong>Total:</strong> 623: {data.total.caixa623} / 618: {data.total.caixa618}</div>
+        <div><strong>Contagem:</strong> {label1}: {data.contagem.value1} / {label2}: {data.contagem.value2}</div>
+        <div><strong>Transito:</strong> {label1}: {data.transito.value1} / {label2}: {data.transito.value2}</div>
+        <div><strong>Fornecedor:</strong> {label1}: {data.fornecedor.value1} / {label2}: {data.fornecedor.value2}</div>
+        <div><strong>Total:</strong> {label1}: {data.total.value1} / {label2}: {data.total.value2}</div>
       </CardContent>
     </Card>
   )
 }
 
-// Componente para exibir o card de lojas com rolagem
-function LojasCard({ data }: { data: { [loja: string]: { caixa623: number, caixa618: number } } }) {
+// Componente para exibir o card de lojas com rolagem e rótulos dinâmicos
+function LojasCard({ data, label1, label2 }: { 
+  data: { [loja: string]: { value1: number, value2: number } }, 
+  label1: string, 
+  label2: string 
+}) {
   return (
     <Card className="m-2">
       <CardHeader>
@@ -412,7 +394,7 @@ function LojasCard({ data }: { data: { [loja: string]: { caixa623: number, caixa
           {Object.entries(data).map(([loja, valores]) => (
             <div key={loja} className="flex justify-between border-b py-1">
               <span>{loja}</span>
-              <span>623: {valores.caixa623} / 618: {valores.caixa618}</span>
+              <span>{label1}: {valores.value1} / {label2}: {valores.value2}</span>
             </div>
           ))}
         </div>

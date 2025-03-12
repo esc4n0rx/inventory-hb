@@ -16,7 +16,7 @@ const allowedTables = [
   "ativo_contagemlojas",
   "ativo_dadostransito",
   "ativo_inventario_hb",
-  "ativo_dadoscadastral",
+  "ativos_dadoscadastral",
 ]
 
 export default function Settings() {
