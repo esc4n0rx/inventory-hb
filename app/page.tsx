@@ -39,7 +39,10 @@ interface DashboardData {
   itensConferidos: number
   emInventario: number
   statusInventario: StatusInventario[]
-  distribuicaoAtivos: { caixa_hb_623: number; caixa_hb_618: number }
+  distribuicaoAtivos: {
+    inventarioAtual: { caixa_hb_623: number; caixa_hb_618: number }
+    inventarioAnterior: { caixa_hb_623: number; caixa_hb_618: number }
+  }
 }
 
 interface AcompanhamentoResponse {
@@ -51,12 +54,7 @@ interface AcompanhamentoResponse {
 
 const container = {
   hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-    },
-  },
+  show: { opacity: 1, transition: { staggerChildren: 0.1 } },
 }
 
 const item = {
@@ -91,16 +89,24 @@ export default function Home() {
     { name: "Pendentes", value: 0, color: "hsl(var(--chart-3))" },
   ]
 
-  // Preparação dos dados comparativos para o gráfico de barras
+  // Construção dos dados comparativos para o gráfico de barras (4 barras)
   let comparativoData: { name: string; value: number }[] = []
   if (dashboardData && dashboardData.distribuicaoAtivos) {
-    const comp = dashboardData.distribuicaoAtivos
-    if (comp.caixa_hb_623 === 0 && comp.caixa_hb_618 === 0) {
-      comparativoData = [] // Se os valores forem zero, o gráfico exibirá a mensagem "Não há dados ainda"
+    const invAtual = dashboardData.distribuicaoAtivos.inventarioAtual
+    const invAnterior = dashboardData.distribuicaoAtivos.inventarioAnterior
+    if (
+      invAtual.caixa_hb_623 === 0 &&
+      invAtual.caixa_hb_618 === 0 &&
+      invAnterior.caixa_hb_623 === 0 &&
+      invAnterior.caixa_hb_618 === 0
+    ) {
+      comparativoData = []
     } else {
       comparativoData = [
-        { name: "CAIXA HB 623", value: comp.caixa_hb_623 },
-        { name: "CAIXA HB 618", value: comp.caixa_hb_618 },
+        { name: "CAIXA HB 623 - Atual", value: invAtual.caixa_hb_623 },
+        { name: "CAIXA HB 623 - Anterior", value: invAnterior.caixa_hb_623 },
+        { name: "CAIXA HB 618 - Atual", value: invAtual.caixa_hb_618 },
+        { name: "CAIXA HB 618 - Anterior", value: invAnterior.caixa_hb_618 },
       ]
     }
   }
@@ -143,7 +149,7 @@ export default function Home() {
             <div>Carregando dados...</div>
           ) : (
             <>
-              {/* Primeira linha de cards */}
+              {/* Linha de cards superiores */}
               <motion.div
                 variants={container}
                 initial="hidden"
@@ -219,7 +225,7 @@ export default function Home() {
                 </motion.div>
               </motion.div>
 
-              {/* Segunda linha: Comparativo e Status, lado a lado */}
+              {/* Linha de comparativo e status (lado a lado) */}
               <motion.div
                 variants={container}
                 initial="hidden"
@@ -243,14 +249,19 @@ export default function Home() {
                               <CartesianGrid strokeDasharray="3 3" opacity={0.4} />
                               <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                               <YAxis />
-                              <Tooltip 
-                                contentStyle={{ 
-                                  backgroundColor: 'hsl(var(--background))',
-                                  border: '1px solid hsl(var(--border))'
+                              <Tooltip
+                                contentStyle={{
+                                  backgroundColor: "hsl(var(--background))",
+                                  border: "1px solid hsl(var(--border))",
                                 }}
                               />
                               <Legend />
-                              <Bar name="Comparativo" dataKey="value" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
+                              <Bar
+                                name="Comparativo"
+                                dataKey="value"
+                                fill="hsl(var(--chart-1))"
+                                radius={[4, 4, 0, 0]}
+                              />
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
@@ -258,7 +269,6 @@ export default function Home() {
                     </CardContent>
                   </Card>
                 </motion.div>
-
                 <motion.div variants={item}>
                   <Card>
                     <CardHeader>
@@ -281,10 +291,10 @@ export default function Home() {
                                 <Cell key={`cell-${index}`} fill={entry.color} />
                               ))}
                             </Pie>
-                            <Tooltip 
-                              contentStyle={{ 
-                                backgroundColor: 'hsl(var(--background))',
-                                border: '1px solid hsl(var(--border))'
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: "hsl(var(--background))",
+                                border: "1px solid hsl(var(--border))",
                               }}
                             />
                             <Legend />
@@ -331,7 +341,7 @@ export default function Home() {
               ))}
             </div>
             <div className="flex justify-end mt-4">
-            <Button variant="outline" onClick={() => setShowStatusModal(false)}>
+              <Button variant="outline" onClick={() => setShowStatusModal(false)}>
                 Fechar
               </Button>
             </div>
