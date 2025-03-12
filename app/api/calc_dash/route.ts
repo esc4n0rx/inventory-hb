@@ -83,7 +83,7 @@ export async function GET(request: Request) {
     `- Total: ${totalSetores}\n` +
     `- Conferidos (${finishedSetores}): ${finishedSetoresNames.join(', ')}\n` +
     `- Pendentes (${pendingSetores}): ${pendingSetoresNames.join(', ')}\n\n`
-
+  
   // Dados comparativos do inventário:
   // Busca os 2 últimos registros da tabela ativo_resultado_inv para o mode "inventariohb"
   const { data: resultados, error: errorResultados } = await supabase
@@ -92,13 +92,22 @@ export async function GET(request: Request) {
     .eq('mode', 'inventariohb')
     .order('cod_inventario', { ascending: false })
     .limit(2)
-  
-  let comparativo = { caixa_hb_623: 0, caixa_hb_618: 0 }
-  if (!errorResultados && resultados && resultados.length === 2) {
+
+  let comparativo = {
+    inventarioAtual: { caixa_hb_623: 0, caixa_hb_618: 0 },
+    inventarioAnterior: { caixa_hb_623: 0, caixa_hb_618: 0 },
+  }
+  if (!errorResultados && resultados && resultados.length >= 2) {
     const [atual, anterior] = resultados
     comparativo = {
-      caixa_hb_623: atual.caixa_hb_623 - anterior.caixa_hb_623,
-      caixa_hb_618: atual.caixa_hb_618 - anterior.caixa_hb_618,
+      inventarioAtual: { 
+        caixa_hb_623: atual.caixa_hb_623, 
+        caixa_hb_618: atual.caixa_hb_618 
+      },
+      inventarioAnterior: { 
+        caixa_hb_623: anterior.caixa_hb_623, 
+        caixa_hb_618: anterior.caixa_hb_618 
+      }
     }
   }
 

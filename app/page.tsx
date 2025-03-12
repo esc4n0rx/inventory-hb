@@ -33,27 +33,13 @@ interface StatusInventario {
   color: string
 }
 
-interface InventoryRow {
-  tipo: string
-  contagemLojas: number
-  contagemCD: number
-  transitoSP: number
-  transitoES: number
-  fornecedores: number
-  diferenca: number | string
-  status: string
-}
-
 interface DashboardData {
   totalAtivos: number
   itensFaltantes: number
   itensConferidos: number
   emInventario: number
   statusInventario: StatusInventario[]
-  distribuicaoAtivos: {
-    caixa_hb_623: number
-    caixa_hb_618: number
-  }
+  distribuicaoAtivos: { caixa_hb_623: number; caixa_hb_618: number }
 }
 
 interface AcompanhamentoResponse {
@@ -62,15 +48,6 @@ interface AcompanhamentoResponse {
   percentual: number
   pendentes: { [regional: string]: string[] }
 }
-
-const barData = [
-  { name: "CAIXA HB 623", quantidade: 150, esperado: 155 },
-  { name: "CAIXA HB 618", quantidade: 120, esperado: 120 },
-  { name: "CAIXA HNT G", quantidade: 90, esperado: 85 },
-  { name: "CAIXA HNT P", quantidade: 80, esperado: 80 },
-  { name: "CAIXA BASCULHANTE", quantidade: 60, esperado: 65 },
-  { name: "CAIXA BIN", quantidade: 40, esperado: 40 },
-]
 
 const container = {
   hidden: { opacity: 0 },
@@ -114,16 +91,12 @@ export default function Home() {
     { name: "Pendentes", value: 0, color: "hsl(var(--chart-3))" },
   ]
 
-
-    const comp = dashboardData?.distribuicaoAtivos as {
-      caixa_hb_623: number
-      caixa_hb_618: number
-    } | undefined
+  // Preparação dos dados comparativos para o gráfico de barras
   let comparativoData: { name: string; value: number }[] = []
   if (dashboardData && dashboardData.distribuicaoAtivos) {
     const comp = dashboardData.distribuicaoAtivos
     if (comp.caixa_hb_623 === 0 && comp.caixa_hb_618 === 0) {
-      comparativoData = []
+      comparativoData = [] // Se os valores forem zero, o gráfico exibirá a mensagem "Não há dados ainda"
     } else {
       comparativoData = [
         { name: "CAIXA HB 623", value: comp.caixa_hb_623 },
@@ -151,6 +124,7 @@ export default function Home() {
           <Sidebar />
         </aside>
         <main className="flex-1 p-8">
+          {/* Cabeçalho */}
           <div className="flex justify-between items-center mb-8">
             <div>
               <h1 className="text-3xl font-bold">Dashboard</h1>
@@ -169,6 +143,7 @@ export default function Home() {
             <div>Carregando dados...</div>
           ) : (
             <>
+              {/* Primeira linha de cards */}
               <motion.div
                 variants={container}
                 initial="hidden"
@@ -177,7 +152,7 @@ export default function Home() {
               >
                 <motion.div variants={item}>
                   <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardHeader className="flex justify-between items-center pb-2">
                       <CardTitle className="text-sm font-medium">
                         Total de Lojas Finalizadas
                       </CardTitle>
@@ -193,7 +168,7 @@ export default function Home() {
 
                 <motion.div variants={item}>
                   <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardHeader className="flex justify-between items-center pb-2">
                       <CardTitle className="text-sm font-medium">
                         Lojas Faltantes
                       </CardTitle>
@@ -213,7 +188,7 @@ export default function Home() {
 
                 <motion.div variants={item}>
                   <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardHeader className="flex justify-between items-center pb-2">
                       <CardTitle className="text-sm font-medium">
                         Setores Finalizados
                       </CardTitle>
@@ -229,7 +204,7 @@ export default function Home() {
 
                 <motion.div variants={item}>
                   <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardHeader className="flex justify-between items-center pb-2">
                       <CardTitle className="text-sm font-medium">
                         Setores Pendentes
                       </CardTitle>
@@ -244,66 +219,53 @@ export default function Home() {
                 </motion.div>
               </motion.div>
 
+              {/* Segunda linha: Comparativo e Status, lado a lado */}
               <motion.div
                 variants={container}
                 initial="hidden"
                 animate="show"
-                className="mb-8"
+                className="grid gap-4 md:grid-cols-2 mb-8"
               >
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Comparativo de Inventário</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {comparativoData.length === 0 ? (
-                      <div className="h-[400px] flex items-center justify-center text-center text-sm text-muted-foreground">
-                        Não há dados ainda
-                      </div>
-                    ) : (
-                      <div className="h-[400px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={comparativoData} margin={{ left: 20 }}>
-                            <CartesianGrid strokeDasharray="3 3" opacity={0.4} />
-                            <XAxis 
-                              dataKey="name" 
-                              tick={{ fontSize: 12 }}
-                            />
-                            <YAxis />
-                            <Tooltip 
-                              contentStyle={{ 
-                                backgroundColor: 'hsl(var(--background))',
-                                border: '1px solid hsl(var(--border))'
-                              }}
-                            />
-                            <Legend />
-                            <Bar 
-                              name="Comparativo" 
-                              dataKey="value" 
-                              fill="hsl(var(--chart-1))"
-                              radius={[4, 4, 0, 0]}
-                            />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
+                <motion.div variants={item}>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Comparativo de Inventário</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {comparativoData.length === 0 ? (
+                        <div className="h-[300px] flex items-center justify-center text-center text-sm text-muted-foreground">
+                          Não há dados ainda
+                        </div>
+                      ) : (
+                        <div className="h-[300px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={comparativoData} margin={{ left: 20 }}>
+                              <CartesianGrid strokeDasharray="3 3" opacity={0.4} />
+                              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                              <YAxis />
+                              <Tooltip 
+                                contentStyle={{ 
+                                  backgroundColor: 'hsl(var(--background))',
+                                  border: '1px solid hsl(var(--border))'
+                                }}
+                              />
+                              <Legend />
+                              <Bar name="Comparativo" dataKey="value" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </motion.div>
 
-              {/* Gráfico de Status do Inventário */}
-              <motion.div
-                variants={container}
-                initial="hidden"
-                animate="show"
-                className="grid gap-6 md:grid-cols-2 mb-8"
-              >
                 <motion.div variants={item}>
                   <Card>
                     <CardHeader>
                       <CardTitle>Status do Inventário</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="h-[400px]">
+                      <div className="h-[300px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                             <Pie
@@ -369,7 +331,7 @@ export default function Home() {
               ))}
             </div>
             <div className="flex justify-end mt-4">
-              <Button variant="outline" onClick={() => setShowStatusModal(false)}>
+            <Button variant="outline" onClick={() => setShowStatusModal(false)}>
                 Fechar
               </Button>
             </div>
